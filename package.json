@@ -1,0 +1,33 @@
+{
+  "name": "cloudlaunch",
+  "version": "1.0.0",
+  "description": "Internal tool for deploying static websites to AWS S3 + CloudFront",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.aerwin.cloudlaunch",
+    "productName": "CloudLaunch",
+    "mac": {
+      "target": "dmg",
+      "icon": "AppIcon.icns"
+    },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudfront": "^3.750.0",
+    "@aws-sdk/client-s3": "^3.750.0",
+    "mime-types": "^2.1.35",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.8.1"
+  }
+}
