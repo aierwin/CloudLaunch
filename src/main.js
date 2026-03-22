@@ -268,14 +268,24 @@ ipcMain.handle('disable-distribution', async (_event, { accessKeyId, secretAcces
 });
 
 // Custom domain / ACM certificate
-ipcMain.handle('request-certificate', async (_event, { accessKeyId, secretAccessKey, domain }) => {
+ipcMain.handle('request-certificate', async (_event, { accessKeyId, secretAccessKey, domain, validationMethod, validationDomain }) => {
   try {
+    const method = validationMethod === 'EMAIL' ? 'EMAIL' : 'DNS';
     const credentials = { accessKeyId, secretAccessKey };
     const acm = new ACMClient({ region: 'us-east-1', credentials });
-    const result = await acm.send(new RequestCertificateCommand({
+    const params = {
       DomainName: domain,
-      ValidationMethod: 'DNS'
-    }));
+      ValidationMethod: method
+    };
+    // If a validation domain is provided for email verification, use it to redirect
+    // approval emails to admin addresses at the specified (super)domain
+    if (method === 'EMAIL' && validationDomain) {
+      params.DomainValidationOptions = [{
+        DomainName: domain,
+        ValidationDomain: validationDomain
+      }];
+    }
+    const result = await acm.send(new RequestCertificateCommand(params));
     return { success: true, certificateArn: result.CertificateArn };
   } catch (err) {
     return { success: false, error: err.message };
@@ -292,7 +302,8 @@ ipcMain.handle('check-certificate-status', async (_event, { accessKeyId, secretA
       domain: opt.DomainName,
       name: opt.ResourceRecord?.Name || '',
       value: opt.ResourceRecord?.Value || '',
-      validationStatus: opt.ValidationStatus || 'PENDING'
+      validationStatus: opt.ValidationStatus || 'PENDING',
+      validationEmails: opt.ValidationEmails || []
     }));
     return { success: true, status: cert.Status, validationRecords };
   } catch (err) {

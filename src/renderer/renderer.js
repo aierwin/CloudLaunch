@@ -25,6 +25,7 @@ const state = {
     deploymentId: null,
     domain: '',
     certificateArn: '',
+    validationMethod: 'DNS',
     validationRecords: [],
     step: 1
   }
@@ -213,6 +214,11 @@ function updateCardStatus(deploymentId) {
   const deleteBtn = card.querySelector('[data-action="delete-deployment"]');
   if (deleteBtn) {
     deleteBtn.disabled = !display.canDelete;
+    if (!display.canDelete) {
+      deleteBtn.setAttribute('data-tooltip', 'You must disable the deployment before deleting it');
+    } else {
+      deleteBtn.removeAttribute('data-tooltip');
+    }
   }
 
   // Update Remove button
@@ -230,7 +236,15 @@ function updateCardStatus(deploymentId) {
   const canManageDomain = isLive || isDeploying;
 
   const addDomainBtn = card.querySelector('[data-action="add-domain"]');
-  if (addDomainBtn) addDomainBtn.style.display = (!hasDomain && !hasPendingDomain && canManageDomain) ? '' : 'none';
+  if (addDomainBtn) {
+    addDomainBtn.style.display = (!hasDomain && !hasPendingDomain && canManageDomain) ? '' : 'none';
+    addDomainBtn.disabled = isDeploying;
+  }
+
+  const removeDomainBtn = card.querySelector('[data-action="remove-domain"]');
+  if (removeDomainBtn) {
+    removeDomainBtn.disabled = isDeploying;
+  }
 
   const resumeDomainBtn = card.querySelector('[data-action="resume-domain"]');
   if (resumeDomainBtn) resumeDomainBtn.style.display = hasPendingDomain ? '' : 'none';
@@ -326,12 +340,12 @@ function renderDashboard() {
               <button class="deploy-option" data-action="update-new-dir" data-id="${d.id}">Change Deployment Directory</button>
             </div>
           </div>
-          <button class="btn-action btn-domain" data-action="add-domain" data-id="${d.id}" ${hasDomain || hasPendingDomain || !canManageDomain ? 'style="display:none;"' : ''}>Add Domain</button>
+          <button class="btn-action btn-domain" data-action="add-domain" data-id="${d.id}" ${hasDomain || hasPendingDomain || !canManageDomain ? 'style="display:none;"' : ''} ${isDeploying ? 'disabled' : ''}>Add Domain</button>
           <button class="btn-action btn-domain" data-action="resume-domain" data-id="${d.id}" ${!hasPendingDomain ? 'style="display:none;"' : ''}>Resume Domain Setup</button>
           <button class="btn-action btn-cancel-domain" data-action="cancel-domain-setup-card" data-id="${d.id}" ${!hasPendingDomain ? 'style="display:none;"' : ''}>Cancel Domain</button>
-          <button class="btn-action btn-cancel-domain" data-action="remove-domain" data-id="${d.id}" ${!hasDomain ? 'style="display:none;"' : ''}>Remove Domain</button>
+          <button class="btn-action btn-cancel-domain" data-action="remove-domain" data-id="${d.id}" ${!hasDomain ? 'style="display:none;"' : ''} ${isDeploying ? 'disabled' : ''}>Remove Domain</button>
           <button class="btn-action btn-disable" data-action="disable-distribution" data-id="${d.id}" ${!display.canDisable ? 'disabled' : ''} ${isFullyDisabled ? 'style="display:none;"' : ''}>Disable</button>
-          <button class="btn-action btn-delete" data-action="delete-deployment" data-id="${d.id}" ${!display.canDelete ? 'disabled' : ''}>Delete</button>
+          <button class="btn-action btn-delete" data-action="delete-deployment" data-id="${d.id}" ${!display.canDelete ? 'disabled' : ''} ${!display.canDelete ? 'data-tooltip="You must disable the deployment before deleting it"' : ''}>Delete</button>
           <div class="open-in-dropdown">
             <button class="btn-action btn-open-in" data-action="toggle-open-in" data-id="${d.id}">Open In ▾</button>
             <div class="open-in-menu" id="open-in-menu-${d.id}">
@@ -392,6 +406,25 @@ function handleOpenIn(app, id) {
 }
 
 // Close dropdown menus when clicking outside
+// Global tooltip for disabled buttons
+(function() {
+  const tooltip = document.getElementById('global-tooltip');
+  document.addEventListener('mouseover', (e) => {
+    const btn = e.target.closest('[data-tooltip]:disabled');
+    if (btn) {
+      const rect = btn.getBoundingClientRect();
+      tooltip.textContent = btn.getAttribute('data-tooltip');
+      tooltip.style.display = 'block';
+      tooltip.style.left = (rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+      tooltip.style.top = (rect.top - tooltip.offsetHeight - 6) + 'px';
+    }
+  });
+  document.addEventListener('mouseout', (e) => {
+    const btn = e.target.closest('[data-tooltip]:disabled');
+    if (btn) tooltip.style.display = 'none';
+  });
+})();
+
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.open-in-dropdown')) {
     document.querySelectorAll('.open-in-menu.show').forEach(menu => menu.classList.remove('show'));
@@ -906,6 +939,7 @@ function showDomainModal(deploymentId) {
     deploymentId,
     domain: '',
     certificateArn: '',
+    validationMethod: 'DNS',
     validationRecords: [],
     step: 1
   };
@@ -913,23 +947,48 @@ function showDomainModal(deploymentId) {
   // Reset UI
   document.getElementById('domain-input').value = '';
   document.getElementById('domain-error').textContent = '';
+  document.getElementById('domain-method-error').textContent = '';
   document.getElementById('domain-validate-error').textContent = '';
+  document.getElementById('domain-email-validate-error').textContent = '';
   document.getElementById('domain-apply-error').textContent = '';
   document.getElementById('domain-validate-status').style.display = 'none';
+  document.getElementById('domain-email-validate-status').style.display = 'none';
   document.getElementById('domain-records-loading').style.display = '';
   document.getElementById('domain-records-ready').style.display = 'none';
-  document.getElementById('btn-check-cert').textContent = 'Check Status';
-  document.getElementById('btn-check-cert').disabled = true;
+  document.getElementById('domain-email-loading').style.display = '';
+  document.getElementById('domain-email-ready').style.display = 'none';
+  document.getElementById('domain-method-loading').style.display = 'none';
+  document.getElementById('validation-domain-input').value = '';
+  document.getElementById('validation-domain-group').style.display = 'none';
+  document.getElementById('btn-check-cert-dns').textContent = 'Check Status';
+  document.getElementById('btn-check-cert-dns').disabled = true;
+  document.getElementById('btn-check-cert-email').textContent = 'Check Status';
+  document.getElementById('btn-check-cert-email').disabled = true;
   document.getElementById('btn-domain-continue').disabled = false;
   document.getElementById('btn-domain-continue').textContent = 'Continue';
+
+  // Re-enable method cards
+  document.querySelectorAll('.verification-method-card').forEach(c => {
+    c.disabled = false;
+    c.style.opacity = '';
+    c.style.pointerEvents = '';
+  });
 
   // Check if resuming a pending domain setup
   if (deployment.pendingDomain) {
     state.domainSetup.domain = deployment.pendingDomain.domain;
     state.domainSetup.certificateArn = deployment.pendingDomain.certificateArn;
-    showDomainStep(2);
-    document.getElementById('domain-modal').style.display = 'flex';
-    pollForValidationRecords();
+    state.domainSetup.validationMethod = deployment.pendingDomain.validationMethod || 'DNS';
+    if (state.domainSetup.validationMethod === 'EMAIL') {
+      showDomainStep(4);
+      document.getElementById('domain-step-4-name').textContent = state.domainSetup.domain;
+      document.getElementById('domain-modal').style.display = 'flex';
+      pollForEmailValidation();
+    } else {
+      showDomainStep(3);
+      document.getElementById('domain-modal').style.display = 'flex';
+      pollForValidationRecords();
+    }
     return;
   }
 
@@ -939,17 +998,17 @@ function showDomainModal(deploymentId) {
 
 function hideDomainModal() {
   document.getElementById('domain-modal').style.display = 'none';
-  state.domainSetup = { deploymentId: null, domain: '', certificateArn: '', validationRecords: [], step: 1 };
+  state.domainSetup = { deploymentId: null, domain: '', certificateArn: '', validationMethod: 'DNS', validationRecords: [], step: 1 };
 }
 
 function showDomainStep(step) {
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 6; i++) {
     document.getElementById(`domain-step-${i}`).style.display = i === step ? '' : 'none';
   }
   state.domainSetup.step = step;
 }
 
-async function handleRequestCertificate() {
+function handleRequestCertificate() {
   let domain = document.getElementById('domain-input').value.trim();
 
   // Strip protocol if user accidentally included it
@@ -963,20 +1022,64 @@ async function handleRequestCertificate() {
   state.domainSetup.domain = domain;
   document.getElementById('domain-error').textContent = '';
 
-  const btn = document.getElementById('btn-domain-continue');
-  btn.disabled = true;
-  btn.textContent = 'Requesting...';
+  // Show step 2: choose verification method
+  document.getElementById('domain-step-2-name').textContent = domain;
+  showDomainStep(2);
+}
+
+function showEmailValidationOptions() {
+  // Highlight the email card and show the validation domain input
+  document.querySelectorAll('.verification-method-card').forEach(c => {
+    c.style.opacity = c.dataset.action === 'domain-choose-email' ? '' : '0.4';
+  });
+  document.getElementById('validation-domain-group').style.display = '';
+  // Pre-fill placeholder with superdomain suggestion
+  const domain = state.domainSetup.domain;
+  const parts = domain.split('.');
+  if (parts.length > 2) {
+    document.getElementById('validation-domain-input').placeholder = parts.slice(1).join('.');
+  }
+}
+
+async function handleChooseVerificationMethod(method) {
+  state.domainSetup.validationMethod = method;
+  const domain = state.domainSetup.domain;
+
+  // Disable cards and show loading
+  document.querySelectorAll('.verification-method-card').forEach(c => {
+    c.disabled = true;
+    c.style.opacity = '0.5';
+    c.style.pointerEvents = 'none';
+  });
+  document.getElementById('validation-domain-group').style.display = 'none';
+  document.getElementById('domain-method-error').textContent = '';
+  document.getElementById('domain-method-loading').style.display = '';
+
+  // Read validation domain for email verification
+  let validationDomain = '';
+  if (method === 'EMAIL') {
+    validationDomain = document.getElementById('validation-domain-input').value.trim();
+  }
 
   const result = await window.api.requestCertificate({
     accessKeyId: state.accessKeyId,
     secretAccessKey: state.secretAccessKey,
-    domain
+    domain,
+    validationMethod: method,
+    validationDomain: validationDomain || undefined
   });
 
   if (!result.success) {
-    document.getElementById('domain-error').textContent = result.error;
-    btn.disabled = false;
-    btn.textContent = 'Continue';
+    document.getElementById('domain-method-error').textContent = result.error;
+    document.getElementById('domain-method-loading').style.display = 'none';
+    document.querySelectorAll('.verification-method-card').forEach(c => {
+      c.disabled = false;
+      c.style.opacity = '';
+      c.style.pointerEvents = '';
+    });
+    if (method === 'EMAIL') {
+      showEmailValidationOptions();
+    }
     return;
   }
 
@@ -985,18 +1088,30 @@ async function handleRequestCertificate() {
   // Persist pending domain to the deployment record so it survives modal close
   const deployment = state.deployments.find(d => d.id === state.domainSetup.deploymentId);
   if (deployment) {
-    const pendingDomain = { domain, certificateArn: result.certificateArn };
+    const pendingDomain = { domain, certificateArn: result.certificateArn, validationMethod: method };
     await window.api.updateDeploymentRecord({ id: deployment.id, updates: { pendingDomain } });
     const idx = state.deployments.findIndex(d => d.id === deployment.id);
     if (idx >= 0) state.deployments[idx].pendingDomain = pendingDomain;
   }
 
-  // Show step 2 with loading spinner, then poll for records
-  showDomainStep(2);
-  document.getElementById('domain-records-loading').style.display = '';
-  document.getElementById('domain-records-ready').style.display = 'none';
-  document.getElementById('btn-check-cert').disabled = true;
-  pollForValidationRecords();
+  document.getElementById('domain-method-loading').style.display = 'none';
+
+  if (method === 'EMAIL') {
+    // Show step 4: email verification
+    document.getElementById('domain-step-4-name').textContent = domain;
+    showDomainStep(4);
+    document.getElementById('domain-email-loading').style.display = '';
+    document.getElementById('domain-email-ready').style.display = 'none';
+    document.getElementById('btn-check-cert-email').disabled = true;
+    pollForEmailValidation();
+  } else {
+    // Show step 3: DNS verification with loading spinner, then poll for records
+    showDomainStep(3);
+    document.getElementById('domain-records-loading').style.display = '';
+    document.getElementById('domain-records-ready').style.display = 'none';
+    document.getElementById('btn-check-cert-dns').disabled = true;
+    pollForValidationRecords();
+  }
 }
 
 async function pollForValidationRecords() {
@@ -1021,7 +1136,7 @@ async function pollForValidationRecords() {
       renderDnsRecords(readyRecords);
       document.getElementById('domain-records-loading').style.display = 'none';
       document.getElementById('domain-records-ready').style.display = '';
-      document.getElementById('btn-check-cert').disabled = false;
+      document.getElementById('btn-check-cert-dns').disabled = false;
       return;
     }
 
@@ -1036,8 +1151,8 @@ async function pollForValidationRecords() {
   document.getElementById('domain-records-loading').style.display = 'none';
   document.getElementById('domain-records-ready').style.display = '';
   document.getElementById('domain-validate-error').textContent = 'Verification record is taking longer than expected. Please try again in a moment.';
-  document.getElementById('btn-check-cert').disabled = false;
-  document.getElementById('btn-check-cert').textContent = 'Retry';
+  document.getElementById('btn-check-cert-dns').disabled = false;
+  document.getElementById('btn-check-cert-dns').textContent = 'Retry';
 }
 
 function renderDnsRecords(records) {
@@ -1058,10 +1173,71 @@ function renderDnsRecords(records) {
   `).join('');
 }
 
+async function pollForEmailValidation() {
+  const maxAttempts = 20;
+  for (let i = 0; i < maxAttempts; i++) {
+    const result = await window.api.checkCertificateStatus({
+      accessKeyId: state.accessKeyId,
+      secretAccessKey: state.secretAccessKey,
+      certificateArn: state.domainSetup.certificateArn
+    });
+
+    if (!result.success) {
+      if (!state.domainSetup.certificateArn) return;
+      continue;
+    }
+
+    // If already issued (e.g. user approved email very fast), go straight to apply
+    if (result.status === 'ISSUED') {
+      document.getElementById('domain-email-loading').style.display = 'none';
+      document.getElementById('domain-email-ready').style.display = 'none';
+      await handleApplyDomain();
+      return;
+    }
+
+    // Collect validation emails from all validation options
+    const allEmails = result.validationRecords.flatMap(r => r.validationEmails || []);
+    if (allEmails.length > 0) {
+      renderEmailList(allEmails);
+      document.getElementById('domain-email-loading').style.display = 'none';
+      document.getElementById('domain-email-ready').style.display = '';
+      document.getElementById('btn-check-cert-email').disabled = false;
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!state.domainSetup.certificateArn) return;
+  }
+
+  // Timeout — show generic email list as fallback
+  const domain = state.domainSetup.domain;
+  const baseDomain = domain.replace(/^www\./, '');
+  const fallbackEmails = [
+    `admin@${baseDomain}`,
+    `administrator@${baseDomain}`,
+    `hostmaster@${baseDomain}`,
+    `postmaster@${baseDomain}`,
+    `webmaster@${baseDomain}`
+  ];
+  renderEmailList(fallbackEmails);
+  document.getElementById('domain-email-loading').style.display = 'none';
+  document.getElementById('domain-email-ready').style.display = '';
+  document.getElementById('btn-check-cert-email').disabled = false;
+}
+
+function renderEmailList(emails) {
+  const container = document.getElementById('domain-email-list');
+  const uniqueEmails = [...new Set(emails)];
+  container.innerHTML = uniqueEmails.map(email =>
+    `<div class="domain-email-list-item">${escapeHtml(email)}</div>`
+  ).join('');
+}
+
 async function handleCheckCertificateStatus() {
-  const btn = document.getElementById('btn-check-cert');
-  const statusEl = document.getElementById('domain-validate-status');
-  const errorEl = document.getElementById('domain-validate-error');
+  const isEmail = state.domainSetup.validationMethod === 'EMAIL';
+  const btn = document.getElementById(isEmail ? 'btn-check-cert-email' : 'btn-check-cert-dns');
+  const statusEl = document.getElementById(isEmail ? 'domain-email-validate-status' : 'domain-validate-status');
+  const errorEl = document.getElementById(isEmail ? 'domain-email-validate-error' : 'domain-validate-error');
 
   btn.disabled = true;
   btn.textContent = 'Checking...';
@@ -1087,7 +1263,10 @@ async function handleCheckCertificateStatus() {
   }
 
   if (result.status === 'FAILED') {
-    errorEl.textContent = 'Certificate validation failed. Please check your DNS records and try again.';
+    const failMsg = isEmail
+      ? 'Certificate validation failed. Please check your email and click the approval link, then try again.'
+      : 'Certificate validation failed. Please check your DNS records and try again.';
+    errorEl.textContent = failMsg;
     btn.disabled = false;
     btn.textContent = 'Check Again';
     return;
@@ -1096,13 +1275,15 @@ async function handleCheckCertificateStatus() {
   // Still pending
   statusEl.style.display = 'block';
   statusEl.className = 'domain-validate-status pending';
-  statusEl.textContent = 'Not verified yet — DNS changes can take 15–30 minutes to propagate. Come back and check again shortly.';
+  statusEl.textContent = isEmail
+    ? 'Not verified yet — check your email for the approval link from AWS. It may take a few minutes to arrive.'
+    : 'Not verified yet — DNS changes can take 15–30 minutes to propagate. Come back and check again shortly.';
   btn.disabled = false;
   btn.textContent = 'Check Again';
 }
 
 async function handleApplyDomain() {
-  showDomainStep(3);
+  showDomainStep(5);
 
   const deployment = state.deployments.find(d => d.id === state.domainSetup.deploymentId);
   if (!deployment) return;
@@ -1148,7 +1329,7 @@ async function handleApplyDomain() {
     </div>
   `;
 
-  showDomainStep(4);
+  showDomainStep(6);
 }
 
 function handleDomainDone() {
@@ -1498,7 +1679,23 @@ document.addEventListener('click', (e) => {
     case 'domain-request-cert':
       handleRequestCertificate();
       break;
+    case 'domain-choose-dns':
+      handleChooseVerificationMethod('DNS');
+      break;
+    case 'domain-choose-email':
+      showEmailValidationOptions();
+      break;
+    case 'domain-send-email':
+      handleChooseVerificationMethod('EMAIL');
+      break;
+    case 'domain-back-to-step1':
+      showDomainStep(1);
+      document.getElementById('domain-input').value = state.domainSetup.domain;
+      break;
     case 'domain-check-status':
+      handleCheckCertificateStatus();
+      break;
+    case 'domain-check-email-status':
       handleCheckCertificateStatus();
       break;
     case 'domain-done':
