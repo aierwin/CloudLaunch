@@ -481,6 +481,94 @@
       </div>
     </div>
 
+    <!-- ========== CUSTOM DOMAIN MODAL ========== -->
+    <div id="domain-modal" class="modal-overlay" style="display:none;">
+      <div class="modal modal-wide">
+
+        <!-- Step 1: Enter Domain -->
+        <div id="domain-step-1" class="domain-step">
+          <h2>Add a Custom Domain</h2>
+          <p class="modal-body">Enter the domain you'd like to use for this site.</p>
+          <div class="form-group">
+            <label for="domain-input">Domain Name</label>
+            <input type="text" id="domain-input" placeholder="www.example.com" autocomplete="off" spellcheck="false">
+            <div class="input-hint">e.g., www.example.com or mysite.com</div>
+          </div>
+          <div class="error-message" id="domain-error"></div>
+          <div class="modal-actions">
+            <button class="btn-secondary" data-action="cancel-domain">Cancel</button>
+            <button class="btn-primary" id="btn-domain-continue" data-action="domain-request-cert">Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 2: DNS Validation -->
+        <div id="domain-step-2" class="domain-step" style="display:none;">
+          <h2>Verify Domain Ownership</h2>
+          <p class="modal-body">You need to add a DNS record to prove you own this domain. Go to where you manage your domain's DNS settings (e.g., GoDaddy, Namecheap, Cloudflare) and create the following record:</p>
+          <div class="domain-records-loading" id="domain-records-loading">
+            <div class="domain-progress">
+              <div class="spinner"></div>
+              <span>Preparing verification record...</span>
+            </div>
+          </div>
+          <div id="domain-records-ready" style="display:none;">
+            <div class="dns-records" id="domain-dns-records"></div>
+            <p class="modal-note">After you've added this record in your DNS settings, come back here and click "Check Status". DNS changes can take 15–30 minutes to propagate, so don't worry if it's not recognized right away.</p>
+            <div class="error-message" id="domain-validate-error"></div>
+            <div class="domain-validate-status" id="domain-validate-status" style="display:none;"></div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-secondary" data-action="cancel-domain-setup">Cancel Setup</button>
+            <button class="btn-primary" id="btn-check-cert" data-action="domain-check-status" disabled>Check Status</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Applying Domain -->
+        <div id="domain-step-3" class="domain-step" style="display:none;">
+          <h2>Connecting Your Domain</h2>
+          <p class="modal-body">Setting up your custom domain. This may take a moment...</p>
+          <div class="domain-progress">
+            <div class="spinner"></div>
+            <span>Updating distribution...</span>
+          </div>
+          <div class="error-message" id="domain-apply-error"></div>
+        </div>
+
+        <!-- Step 4: Done -->
+        <div id="domain-step-4" class="domain-step" style="display:none;">
+          <div class="result-card success">
+            <div class="result-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+              </svg>
+            </div>
+            <h2>Domain Connected!</h2>
+            <p class="modal-body">One last step — go back to your DNS settings and add another CNAME record to point your domain to your site:</p>
+            <div class="dns-records" id="domain-final-cname"></div>
+            <p class="modal-note" style="margin-top: 12px;">Add this record in the same place you added the verification record. Once it propagates (15–30 minutes), your site will be accessible at your custom domain with HTTPS.</p>
+          </div>
+          <div class="modal-actions" style="margin-top: 16px;">
+            <button class="btn-primary" data-action="domain-done">Done</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========== REMOVE DOMAIN CONFIRMATION MODAL ========== -->
+    <div id="remove-domain-modal" class="modal-overlay" style="display:none;">
+      <div class="modal">
+        <h2>Remove Custom Domain?</h2>
+        <p class="modal-body">This will disconnect <strong id="remove-domain-modal-name"></strong> from your site. Your site will still be accessible via the CloudFront URL.</p>
+        <p class="modal-warning">The SSL certificate for this domain will also be deleted.</p>
+        <div class="modal-actions">
+          <button class="btn-secondary" data-action="cancel-remove-domain">Cancel</button>
+          <button class="btn-danger" data-action="confirm-remove-domain">Remove Domain</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="renderer.js"></script>

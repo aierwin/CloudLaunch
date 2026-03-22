@@ -19,7 +19,15 @@ const state = {
   pendingDeleteId: null,
   operationRunning: false,
   distStatuses: {},       // { [deploymentId]: { status, enabled, loading } }
-  statusPollTimer: null
+  statusPollTimer: null,
+  pendingRemoveDomainId: null,
+  domainSetup: {
+    deploymentId: null,
+    domain: '',
+    certificateArn: '',
+    validationRecords: [],
+    step: 1
+  }
 };
 
 // ========================================
@@ -212,6 +220,23 @@ function updateCardStatus(deploymentId) {
   if (removeBtn) {
     removeBtn.style.display = display.canRemove ? '' : 'none';
   }
+
+  // Update domain buttons
+  const deploymentForDomain = state.deployments.find(d => d.id === card.dataset.id);
+  const hasDomain = deploymentForDomain && deploymentForDomain.customDomains && deploymentForDomain.customDomains.length > 0;
+  const hasPendingDomain = deploymentForDomain && deploymentForDomain.pendingDomain && deploymentForDomain.pendingDomain.certificateArn;
+  const isLive = display.cssClass === 'status-live';
+  const isDeploying = display.cssClass === 'status-deploying';
+  const canManageDomain = isLive || isDeploying;
+
+  const addDomainBtn = card.querySelector('[data-action="add-domain"]');
+  if (addDomainBtn) addDomainBtn.style.display = (!hasDomain && !hasPendingDomain && canManageDomain) ? '' : 'none';
+
+  const resumeDomainBtn = card.querySelector('[data-action="resume-domain"]');
+  if (resumeDomainBtn) resumeDomainBtn.style.display = hasPendingDomain ? '' : 'none';
+
+  const cancelDomainBtn = card.querySelector('[data-action="cancel-domain-setup-card"]');
+  if (cancelDomainBtn) cancelDomainBtn.style.display = hasPendingDomain ? '' : 'none';
 }
 
 // ========================================
@@ -251,6 +276,11 @@ function renderDashboard() {
     const display = getStatusDisplay(d.id);
     const s = state.distStatuses[d.id];
     const isFullyDisabled = s && !s.loading && !s.error && !s.enabled && s.status === 'Deployed';
+    const hasDomain = d.customDomains && d.customDomains.length > 0;
+    const hasPendingDomain = d.pendingDomain && d.pendingDomain.certificateArn;
+    const isLive = display.cssClass === 'status-live';
+    const isDeploying = display.cssClass === 'status-deploying';
+    const canManageDomain = isLive || isDeploying;
 
     return `
       <div class="deployment-card" data-id="${d.id}">
@@ -262,6 +292,10 @@ function renderDashboard() {
           </div>
         </div>
         <div class="deployment-card-body">
+          ${hasDomain ? `<div class="deployment-info-row">
+            <span class="info-label">Domain</span>
+            <a class="info-value url-value url-link" href="#" data-open-url="https://${escapeHtml(d.customDomains[0].domain)}">${escapeHtml(d.customDomains[0].domain)}</a>
+          </div>` : ''}
           <div class="deployment-info-row">
             <span class="info-label">CloudFront</span>
             <a class="info-value url-value url-link" href="#" data-open-url="${escapeHtml(d.cloudFrontUrl)}">${escapeHtml(d.cloudFrontUrl)}</a>
@@ -285,8 +319,17 @@ function renderDashboard() {
           ${updatedDate ? `<div class="deployment-info-row"><span class="info-label">Updated</span><span class="info-value">${updatedDate}</span></div>` : ''}
         </div>
         <div class="deployment-card-actions">
-          <button class="btn-action btn-update" data-action="update-new-dir" data-id="${d.id}">Update (New Dir)</button>
-          <button class="btn-action btn-redeploy" data-action="redeploy-same" data-id="${d.id}">Redeploy Same Dir</button>
+          <div class="deploy-dropdown">
+            <button class="btn-action btn-deploy" data-action="toggle-deploy" data-id="${d.id}">Deploy ▾</button>
+            <div class="deploy-menu" id="deploy-menu-${d.id}">
+              <button class="deploy-option" data-action="redeploy-same" data-id="${d.id}">Deploy Changes</button>
+              <button class="deploy-option" data-action="update-new-dir" data-id="${d.id}">Change Deployment Directory</button>
+            </div>
+          </div>
+          <button class="btn-action btn-domain" data-action="add-domain" data-id="${d.id}" ${hasDomain || hasPendingDomain || !canManageDomain ? 'style="display:none;"' : ''}>Add Domain</button>
+          <button class="btn-action btn-domain" data-action="resume-domain" data-id="${d.id}" ${!hasPendingDomain ? 'style="display:none;"' : ''}>Resume Domain Setup</button>
+          <button class="btn-action btn-cancel-domain" data-action="cancel-domain-setup-card" data-id="${d.id}" ${!hasPendingDomain ? 'style="display:none;"' : ''}>Cancel Domain</button>
+          <button class="btn-action btn-cancel-domain" data-action="remove-domain" data-id="${d.id}" ${!hasDomain ? 'style="display:none;"' : ''}>Remove Domain</button>
           <button class="btn-action btn-disable" data-action="disable-distribution" data-id="${d.id}" ${!display.canDisable ? 'disabled' : ''} ${isFullyDisabled ? 'style="display:none;"' : ''}>Disable</button>
           <button class="btn-action btn-delete" data-action="delete-deployment" data-id="${d.id}" ${!display.canDelete ? 'disabled' : ''}>Delete</button>
           <div class="open-in-dropdown">
@@ -295,6 +338,7 @@ function renderDashboard() {
               <button class="open-in-option" data-action="open-in" data-app="finder" data-id="${d.id}">Finder</button>
               <button class="open-in-option" data-action="open-in" data-app="vscode" data-id="${d.id}">VS Code</button>
               <button class="open-in-option" data-action="open-in" data-app="cursor" data-id="${d.id}">Cursor</button>
+              <button class="open-in-option" data-action="open-in" data-app="claude-code" data-id="${d.id}">Claude Code</button>
             </div>
           </div>
           <button class="btn-action btn-remove" data-action="remove-deployment" data-id="${d.id}" ${!display.canRemove ? 'style="display:none;"' : ''}>Remove from App</button>
@@ -304,11 +348,29 @@ function renderDashboard() {
   }).join('');
 }
 
+function toggleDeployMenu(id) {
+  // Close all other menus first
+  document.querySelectorAll('.deploy-menu.show').forEach(menu => {
+    if (menu.id !== `deploy-menu-${id}`) menu.classList.remove('show');
+  });
+  document.querySelectorAll('.open-in-menu.show').forEach(menu => menu.classList.remove('show'));
+  const menu = document.getElementById(`deploy-menu-${id}`);
+  if (!menu) return;
+  const isOpen = menu.classList.toggle('show');
+  if (isOpen) {
+    const btn = menu.closest('.deploy-dropdown').querySelector('[data-action="toggle-deploy"]');
+    const rect = btn.getBoundingClientRect();
+    menu.style.left = `${rect.left}px`;
+    menu.style.top = `${rect.top - menu.offsetHeight - 6}px`;
+  }
+}
+
 function toggleOpenInMenu(id) {
   // Close all other menus first
   document.querySelectorAll('.open-in-menu.show').forEach(menu => {
     if (menu.id !== `open-in-menu-${id}`) menu.classList.remove('show');
   });
+  document.querySelectorAll('.deploy-menu.show').forEach(menu => menu.classList.remove('show'));
   const menu = document.getElementById(`open-in-menu-${id}`);
   if (!menu) return;
   const isOpen = menu.classList.toggle('show');
@@ -329,10 +391,13 @@ function handleOpenIn(app, id) {
   if (menu) menu.classList.remove('show');
 }
 
-// Close open-in menus when clicking outside
+// Close dropdown menus when clicking outside
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.open-in-dropdown')) {
     document.querySelectorAll('.open-in-menu.show').forEach(menu => menu.classList.remove('show'));
+  }
+  if (!e.target.closest('.deploy-dropdown')) {
+    document.querySelectorAll('.deploy-menu.show').forEach(menu => menu.classList.remove('show'));
   }
 }, true);
 
@@ -752,9 +817,12 @@ async function handleDeleteDeployment() {
   document.getElementById('operation-result').style.display = 'none';
   document.getElementById('operation-error').style.display = 'none';
 
+  const hasDomain = deployment.customDomains && deployment.customDomains.length > 0;
+
   const stepsContainer = document.getElementById('operation-steps');
   stepsContainer.innerHTML =
-    buildOperationStepHTML('deleting-objects', 'Delete Bucket Objects')
+    (hasDomain ? buildOperationStepHTML('removing-domain', 'Remove Custom Domain') : '')
+    + buildOperationStepHTML('deleting-objects', 'Delete Bucket Objects')
     + buildOperationStepHTML('deleting-bucket', 'Delete S3 Bucket')
     + buildOperationStepHTML('disabling-distribution', 'Check Distribution Status')
     + buildOperationStepHTML('waiting-distribution', 'Wait for Distribution')
@@ -772,7 +840,9 @@ async function handleDeleteDeployment() {
     secretAccessKey: state.secretAccessKey,
     region: deployment.region,
     bucketName: deployment.bucketName,
-    distributionId: deployment.distributionId
+    distributionId: deployment.distributionId,
+    customDomains: deployment.customDomains || [],
+    pendingDomain: deployment.pendingDomain || null
   });
 
   if (result.success) {
@@ -822,6 +892,352 @@ async function handleRemoveDeployment() {
   state.deployments = state.deployments.filter(d => d.id !== deploymentId);
   delete state.distStatuses[deploymentId];
   renderDashboard();
+}
+
+// ========================================
+// Custom Domain
+// ========================================
+
+function showDomainModal(deploymentId) {
+  const deployment = state.deployments.find(d => d.id === deploymentId);
+  if (!deployment) return;
+
+  state.domainSetup = {
+    deploymentId,
+    domain: '',
+    certificateArn: '',
+    validationRecords: [],
+    step: 1
+  };
+
+  // Reset UI
+  document.getElementById('domain-input').value = '';
+  document.getElementById('domain-error').textContent = '';
+  document.getElementById('domain-validate-error').textContent = '';
+  document.getElementById('domain-apply-error').textContent = '';
+  document.getElementById('domain-validate-status').style.display = 'none';
+  document.getElementById('domain-records-loading').style.display = '';
+  document.getElementById('domain-records-ready').style.display = 'none';
+  document.getElementById('btn-check-cert').textContent = 'Check Status';
+  document.getElementById('btn-check-cert').disabled = true;
+  document.getElementById('btn-domain-continue').disabled = false;
+  document.getElementById('btn-domain-continue').textContent = 'Continue';
+
+  // Check if resuming a pending domain setup
+  if (deployment.pendingDomain) {
+    state.domainSetup.domain = deployment.pendingDomain.domain;
+    state.domainSetup.certificateArn = deployment.pendingDomain.certificateArn;
+    showDomainStep(2);
+    document.getElementById('domain-modal').style.display = 'flex';
+    pollForValidationRecords();
+    return;
+  }
+
+  showDomainStep(1);
+  document.getElementById('domain-modal').style.display = 'flex';
+}
+
+function hideDomainModal() {
+  document.getElementById('domain-modal').style.display = 'none';
+  state.domainSetup = { deploymentId: null, domain: '', certificateArn: '', validationRecords: [], step: 1 };
+}
+
+function showDomainStep(step) {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`domain-step-${i}`).style.display = i === step ? '' : 'none';
+  }
+  state.domainSetup.step = step;
+}
+
+async function handleRequestCertificate() {
+  let domain = document.getElementById('domain-input').value.trim();
+
+  // Strip protocol if user accidentally included it
+  domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+
+  if (!domain || !domain.includes('.') || domain.includes(' ')) {
+    document.getElementById('domain-error').textContent = 'Please enter a valid domain name (e.g., www.example.com).';
+    return;
+  }
+
+  state.domainSetup.domain = domain;
+  document.getElementById('domain-error').textContent = '';
+
+  const btn = document.getElementById('btn-domain-continue');
+  btn.disabled = true;
+  btn.textContent = 'Requesting...';
+
+  const result = await window.api.requestCertificate({
+    accessKeyId: state.accessKeyId,
+    secretAccessKey: state.secretAccessKey,
+    domain
+  });
+
+  if (!result.success) {
+    document.getElementById('domain-error').textContent = result.error;
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+    return;
+  }
+
+  state.domainSetup.certificateArn = result.certificateArn;
+
+  // Persist pending domain to the deployment record so it survives modal close
+  const deployment = state.deployments.find(d => d.id === state.domainSetup.deploymentId);
+  if (deployment) {
+    const pendingDomain = { domain, certificateArn: result.certificateArn };
+    await window.api.updateDeploymentRecord({ id: deployment.id, updates: { pendingDomain } });
+    const idx = state.deployments.findIndex(d => d.id === deployment.id);
+    if (idx >= 0) state.deployments[idx].pendingDomain = pendingDomain;
+  }
+
+  // Show step 2 with loading spinner, then poll for records
+  showDomainStep(2);
+  document.getElementById('domain-records-loading').style.display = '';
+  document.getElementById('domain-records-ready').style.display = 'none';
+  document.getElementById('btn-check-cert').disabled = true;
+  pollForValidationRecords();
+}
+
+async function pollForValidationRecords() {
+  const maxAttempts = 20; // ~20 seconds max
+  for (let i = 0; i < maxAttempts; i++) {
+    const result = await window.api.checkCertificateStatus({
+      accessKeyId: state.accessKeyId,
+      secretAccessKey: state.secretAccessKey,
+      certificateArn: state.domainSetup.certificateArn
+    });
+
+    if (!result.success) {
+      // If the modal was closed while polling, stop
+      if (!state.domainSetup.certificateArn) return;
+      continue;
+    }
+
+    // Check if any record has actual name/value populated
+    const readyRecords = result.validationRecords.filter(r => r.name && r.value);
+    if (readyRecords.length > 0) {
+      state.domainSetup.validationRecords = readyRecords;
+      renderDnsRecords(readyRecords);
+      document.getElementById('domain-records-loading').style.display = 'none';
+      document.getElementById('domain-records-ready').style.display = '';
+      document.getElementById('btn-check-cert').disabled = false;
+      return;
+    }
+
+    // Wait 1 second before retrying
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Stop if modal was closed
+    if (!state.domainSetup.certificateArn) return;
+  }
+
+  // If we get here, records never showed up — show what we have anyway
+  document.getElementById('domain-records-loading').style.display = 'none';
+  document.getElementById('domain-records-ready').style.display = '';
+  document.getElementById('domain-validate-error').textContent = 'Verification record is taking longer than expected. Please try again in a moment.';
+  document.getElementById('btn-check-cert').disabled = false;
+  document.getElementById('btn-check-cert').textContent = 'Retry';
+}
+
+function renderDnsRecords(records) {
+  const container = document.getElementById('domain-dns-records');
+  container.innerHTML = records.map(r => `
+    <div class="dns-record-row">
+      <span class="dns-record-label">Type</span>
+      <span class="dns-record-value">CNAME</span>
+    </div>
+    <div class="dns-record-row">
+      <span class="dns-record-label">Name</span>
+      <span class="dns-record-value">${escapeHtml(r.name)}</span>
+    </div>
+    <div class="dns-record-row">
+      <span class="dns-record-label">Value</span>
+      <span class="dns-record-value">${escapeHtml(r.value)}</span>
+    </div>
+  `).join('');
+}
+
+async function handleCheckCertificateStatus() {
+  const btn = document.getElementById('btn-check-cert');
+  const statusEl = document.getElementById('domain-validate-status');
+  const errorEl = document.getElementById('domain-validate-error');
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  errorEl.textContent = '';
+
+  const result = await window.api.checkCertificateStatus({
+    accessKeyId: state.accessKeyId,
+    secretAccessKey: state.secretAccessKey,
+    certificateArn: state.domainSetup.certificateArn
+  });
+
+  if (!result.success) {
+    errorEl.textContent = result.error;
+    btn.disabled = false;
+    btn.textContent = 'Check Again';
+    return;
+  }
+
+  if (result.status === 'ISSUED') {
+    statusEl.style.display = 'none';
+    await handleApplyDomain();
+    return;
+  }
+
+  if (result.status === 'FAILED') {
+    errorEl.textContent = 'Certificate validation failed. Please check your DNS records and try again.';
+    btn.disabled = false;
+    btn.textContent = 'Check Again';
+    return;
+  }
+
+  // Still pending
+  statusEl.style.display = 'block';
+  statusEl.className = 'domain-validate-status pending';
+  statusEl.textContent = 'Not verified yet — DNS changes can take 15–30 minutes to propagate. Come back and check again shortly.';
+  btn.disabled = false;
+  btn.textContent = 'Check Again';
+}
+
+async function handleApplyDomain() {
+  showDomainStep(3);
+
+  const deployment = state.deployments.find(d => d.id === state.domainSetup.deploymentId);
+  if (!deployment) return;
+
+  const result = await window.api.addCustomDomain({
+    accessKeyId: state.accessKeyId,
+    secretAccessKey: state.secretAccessKey,
+    distributionId: deployment.distributionId,
+    domain: state.domainSetup.domain,
+    certificateArn: state.domainSetup.certificateArn
+  });
+
+  if (!result.success) {
+    document.getElementById('domain-apply-error').textContent = result.error;
+    return;
+  }
+
+  // Save to deployment record — set customDomains and clear pendingDomain
+  const customDomains = [{ domain: state.domainSetup.domain, certificateArn: state.domainSetup.certificateArn, status: 'active' }];
+  await window.api.updateDeploymentRecord({ id: deployment.id, updates: { customDomains, pendingDomain: null } });
+
+  // Update local state
+  const idx = state.deployments.findIndex(d => d.id === deployment.id);
+  if (idx >= 0) {
+    state.deployments[idx].customDomains = customDomains;
+    delete state.deployments[idx].pendingDomain;
+  }
+
+  // Show final CNAME step
+  const cfDomain = deployment.cloudFrontUrl.replace('https://', '');
+  document.getElementById('domain-final-cname').innerHTML = `
+    <div class="dns-record-row">
+      <span class="dns-record-label">Type</span>
+      <span class="dns-record-value">CNAME</span>
+    </div>
+    <div class="dns-record-row">
+      <span class="dns-record-label">Name</span>
+      <span class="dns-record-value">${escapeHtml(state.domainSetup.domain)}</span>
+    </div>
+    <div class="dns-record-row">
+      <span class="dns-record-label">Value</span>
+      <span class="dns-record-value">${escapeHtml(cfDomain)}</span>
+    </div>
+  `;
+
+  showDomainStep(4);
+}
+
+function handleDomainDone() {
+  hideDomainModal();
+  renderDashboard();
+}
+
+async function handleCancelDomainSetup() {
+  const deploymentId = state.domainSetup.deploymentId;
+  const certificateArn = state.domainSetup.certificateArn;
+  const deployment = state.deployments.find(d => d.id === deploymentId);
+
+  // If no cert in current session, check the persisted pending domain
+  const arn = certificateArn || (deployment && deployment.pendingDomain && deployment.pendingDomain.certificateArn);
+
+  if (arn) {
+    // Delete the certificate from AWS
+    try {
+      await window.api.removeCustomDomain({
+        accessKeyId: state.accessKeyId,
+        secretAccessKey: state.secretAccessKey,
+        distributionId: deployment ? deployment.distributionId : '',
+        certificateArn: arn
+      });
+    } catch { /* best effort */ }
+  }
+
+  // Clear pendingDomain from the deployment record
+  if (deployment) {
+    await window.api.updateDeploymentRecord({ id: deployment.id, updates: { pendingDomain: null } });
+    const idx = state.deployments.findIndex(d => d.id === deployment.id);
+    if (idx >= 0) delete state.deployments[idx].pendingDomain;
+  }
+
+  hideDomainModal();
+  renderDashboard();
+}
+
+// ========================================
+// Remove Custom Domain
+// ========================================
+
+function showRemoveDomainConfirmation(deploymentId) {
+  const deployment = state.deployments.find(d => d.id === deploymentId);
+  if (!deployment || !deployment.customDomains || deployment.customDomains.length === 0) return;
+
+  state.pendingRemoveDomainId = deploymentId;
+  document.getElementById('remove-domain-modal-name').textContent = deployment.customDomains[0].domain;
+  document.getElementById('remove-domain-modal').style.display = 'flex';
+}
+
+function hideRemoveDomainModal() {
+  document.getElementById('remove-domain-modal').style.display = 'none';
+  state.pendingRemoveDomainId = null;
+}
+
+async function handleRemoveDomain() {
+  const deploymentId = state.pendingRemoveDomainId;
+  const deployment = state.deployments.find(d => d.id === deploymentId);
+  if (!deployment || !deployment.customDomains || deployment.customDomains.length === 0) return;
+
+  const cd = deployment.customDomains[0];
+
+  // Disable buttons in the modal while working
+  const confirmBtn = document.querySelector('#remove-domain-modal [data-action="confirm-remove-domain"]');
+  const cancelBtn = document.querySelector('#remove-domain-modal [data-action="cancel-remove-domain"]');
+  if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Removing...'; }
+  if (cancelBtn) cancelBtn.disabled = true;
+
+  const result = await window.api.removeCustomDomain({
+    accessKeyId: state.accessKeyId,
+    secretAccessKey: state.secretAccessKey,
+    distributionId: deployment.distributionId,
+    certificateArn: cd.certificateArn
+  });
+
+  if (result.success) {
+    await window.api.updateDeploymentRecord({ id: deployment.id, updates: { customDomains: null } });
+    const idx = state.deployments.findIndex(d => d.id === deploymentId);
+    if (idx >= 0) delete state.deployments[idx].customDomains;
+    hideRemoveDomainModal();
+    renderDashboard();
+  } else {
+    // Restore buttons and show error in the modal
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Remove Domain'; }
+    if (cancelBtn) cancelBtn.disabled = false;
+    const warningEl = document.querySelector('#remove-domain-modal .modal-warning');
+    if (warningEl) warningEl.textContent = `Failed: ${result.error}`;
+  }
 }
 
 // ========================================
@@ -893,7 +1309,6 @@ function updateOperationStep(progress) {
 
 
 function resetWizard() {
-  state.currentStep = 1;
   state.projectName = '';
   state.directoryPath = '';
   state.fileCount = 0;
@@ -905,7 +1320,17 @@ function resetWizard() {
   document.getElementById('directory-picker').style.display = '';
   document.getElementById('selected-directory').style.display = 'none';
 
-  goToStep(1);
+  // Remove active from all step panels to avoid ghost panels
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  state.currentStep = 1;
+  document.getElementById('step-1').classList.add('active');
+
+  // Reset step dots and progress bar
+  document.querySelectorAll('.step-dot').forEach((dot, i) => {
+    dot.classList.remove('active', 'completed');
+    if (i === 0) dot.classList.add('active');
+  });
+  document.getElementById('progress-fill').style.width = '0%';
 }
 
 // ========================================
@@ -998,10 +1423,15 @@ document.addEventListener('click', (e) => {
       break;
 
     // Deployment actions
+    case 'toggle-deploy':
+      toggleDeployMenu(id);
+      break;
     case 'update-new-dir':
+      document.querySelectorAll('.deploy-menu.show').forEach(menu => menu.classList.remove('show'));
       handleUpdateDeployment(id, true);
       break;
     case 'redeploy-same':
+      document.querySelectorAll('.deploy-menu.show').forEach(menu => menu.classList.remove('show'));
       handleUpdateDeployment(id, false);
       break;
     case 'disable-distribution':
@@ -1030,6 +1460,49 @@ document.addEventListener('click', (e) => {
       break;
     case 'cancel-remove':
       hideRemoveModal();
+      break;
+
+    // Custom domain
+    case 'add-domain':
+      showDomainModal(id);
+      break;
+    case 'resume-domain':
+      showDomainModal(id);
+      break;
+    case 'cancel-domain':
+      hideDomainModal();
+      break;
+    case 'cancel-domain-setup':
+      handleCancelDomainSetup();
+      break;
+    case 'cancel-domain-setup-card':
+      // Cancel from dashboard card — set up state so handleCancelDomainSetup works
+      {
+        const dep = state.deployments.find(d => d.id === id);
+        if (dep && dep.pendingDomain) {
+          state.domainSetup.deploymentId = id;
+          state.domainSetup.certificateArn = dep.pendingDomain.certificateArn;
+        }
+        handleCancelDomainSetup();
+      }
+      break;
+    case 'remove-domain':
+      showRemoveDomainConfirmation(id);
+      break;
+    case 'confirm-remove-domain':
+      handleRemoveDomain();
+      break;
+    case 'cancel-remove-domain':
+      hideRemoveDomainModal();
+      break;
+    case 'domain-request-cert':
+      handleRequestCertificate();
+      break;
+    case 'domain-check-status':
+      handleCheckCertificateStatus();
+      break;
+    case 'domain-done':
+      handleDomainDone();
       break;
   }
 });

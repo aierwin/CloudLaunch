@@ -19,6 +19,13 @@ contextBridge.exposeInMainWorld('api', {
   getDistributionStatus: (config) => ipcRenderer.invoke('get-distribution-status', config),
   disableDistribution: (config) => ipcRenderer.invoke('disable-distribution', config),
 
+  // Custom domain
+  requestCertificate: (config) => ipcRenderer.invoke('request-certificate', config),
+  checkCertificateStatus: (config) => ipcRenderer.invoke('check-certificate-status', config),
+  addCustomDomain: (config) => ipcRenderer.invoke('add-custom-domain', config),
+  removeCustomDomain: (config) => ipcRenderer.invoke('remove-custom-domain', config),
+  updateDeploymentRecord: (config) => ipcRenderer.invoke('update-deployment-record', config),
+
   // Directory selection
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
 

@@ -1,25 +1,26 @@
 /* ========================================
-   CloudLaunch — Dark Glassmorphism Theme
+   CloudLaunch — Modern Dark Theme
    ======================================== */
 
 :root {
-  --bg: #0a0a1a;
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --bg-card-hover: rgba(255, 255, 255, 0.07);
-  --border: rgba(255, 255, 255, 0.08);
-  --border-focus: rgba(102, 126, 234, 0.5);
-  --text: #c8c8d4;
-  --text-bright: #eeeef2;
-  --text-dim: rgba(255, 255, 255, 0.35);
-  --accent-1: #667eea;
-  --accent-2: #764ba2;
-  --gradient: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-  --success: #4ade80;
+  --bg: #101014;
+  --bg-card: #1a1a20;
+  --bg-card-hover: #22222a;
+  --bg-elevated: #242430;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-focus: rgba(99, 131, 255, 0.5);
+  --text: #a0a0b0;
+  --text-bright: #e4e4ec;
+  --text-dim: rgba(255, 255, 255, 0.3);
+  --accent-1: #6383ff;
+  --accent-2: #6383ff;
+  --gradient: linear-gradient(135deg, #6383ff, #5a74e8);
+  --success: #34d399;
   --error: #f87171;
   --warning: #fbbf24;
   --danger: #ef4444;
-  --radius: 12px;
-  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-sm: 6px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
 }
 
@@ -116,7 +117,6 @@ body {
   font-weight: 600;
   color: var(--text-dim);
   background: var(--bg);
-  transition: all 0.3s ease;
   position: relative;
   z-index: 1;
 }
@@ -125,12 +125,11 @@ body {
   border-color: var(--accent-1);
   color: var(--text-bright);
   background: var(--bg);
-  box-shadow: 0 0 16px rgba(102, 126, 234, 0.3);
 }
 
 .step-dot.completed .dot {
   border-color: var(--accent-1);
-  background: var(--gradient);
+  background: var(--accent-1);
   color: #fff;
 }
 
@@ -139,7 +138,6 @@ body {
   color: var(--text-dim);
   font-weight: 500;
   letter-spacing: 0.02em;
-  transition: color 0.3s ease;
 }
 
 .step-dot.active .dot-label {
@@ -163,14 +161,8 @@ body {
 }
 
 @keyframes fadeSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .panel-content {
@@ -248,7 +240,7 @@ select {
 }
 
 select option {
-  background: #1a1a2e;
+  background: var(--bg-elevated);
   color: var(--text-bright);
 }
 
@@ -443,13 +435,11 @@ select option {
   border-radius: var(--radius-sm);
   color: var(--text);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .btn-nav-arrow:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
 }
 
 .btn-nav-arrow-disabled,
@@ -467,7 +457,7 @@ select option {
 
 .btn-primary {
   padding: 12px 32px;
-  background: var(--gradient);
+  background: var(--accent-1);
   border: none;
   border-radius: var(--radius-sm);
   color: #fff;
@@ -475,16 +465,14 @@ select option {
   font-weight: 600;
   font-family: var(--font);
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
 }
 
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.35);
+  background: #5a74e8;
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  background: #5069d6;
 }
 
 .btn-primary.btn-sm {
@@ -502,12 +490,11 @@ select option {
   font-weight: 500;
   font-family: var(--font);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
 }
 
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .btn-secondary.btn-sm {
@@ -517,7 +504,7 @@ select option {
 
 .btn-deploy {
   padding: 14px 40px;
-  background: var(--gradient);
+  background: var(--accent-1);
   border: none;
   border-radius: var(--radius-sm);
   color: #fff;
@@ -528,16 +515,14 @@ select option {
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: transform 0.15s, box-shadow 0.15s;
 }
 
 .btn-deploy:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 28px rgba(102, 126, 234, 0.4);
+  background: #5a74e8;
 }
 
 .btn-deploy:active {
-  transform: translateY(0);
+  background: #5069d6;
 }
 
 .btn-danger {
@@ -550,17 +535,14 @@ select option {
   font-weight: 600;
   font-family: var(--font);
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
 }
 
 .btn-danger:hover {
   background: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.35);
 }
 
 .btn-danger:active {
-  transform: translateY(0);
+  background: #c52222;
 }
 
 /* ---- Error Messages ---- */
@@ -584,7 +566,6 @@ select option {
   gap: 14px;
   padding: 12px 16px;
   border-radius: var(--radius-sm);
-  transition: background 0.2s;
 }
 
 .deploy-step-icon {
@@ -658,7 +639,6 @@ select option {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-dim);
-  transition: color 0.2s;
 }
 
 .deploy-step.active .deploy-step-label {
@@ -858,7 +838,6 @@ select option {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  transition: border-color 0.2s;
 }
 
 .deployment-card:hover {
@@ -908,15 +887,15 @@ select option {
 }
 
 .cf-status-badge.status-deploying {
-  background: rgba(251, 191, 36, 0.12);
+  background: rgba(251, 191, 36, 0.1);
   color: var(--warning);
-  animation: statusPulse 2s ease-in-out infinite;
+  animation: statusPulse 3s ease-in-out infinite;
 }
 
 .cf-status-badge.status-disabling {
-  background: rgba(251, 191, 36, 0.12);
+  background: rgba(251, 191, 36, 0.1);
   color: var(--warning);
-  animation: statusPulse 2s ease-in-out infinite;
+  animation: statusPulse 3s ease-in-out infinite;
 }
 
 .cf-status-badge.status-disabled {
@@ -936,7 +915,7 @@ select option {
 
 @keyframes statusPulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.7; }
 }
 
 .deployment-card-body {
@@ -1023,41 +1002,68 @@ a.url-link:hover {
   font-weight: 500;
   font-family: var(--font);
   cursor: pointer;
-  transition: all 0.15s;
   border: 1px solid transparent;
 }
 
-.btn-action.btn-update {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: rgba(102, 126, 234, 0.2);
+/* Deploy Dropdown */
+.deploy-dropdown {
+  position: relative;
+}
+
+.btn-action.btn-deploy {
+  background: rgba(99, 131, 255, 0.1);
+  border-color: rgba(99, 131, 255, 0.18);
   color: var(--accent-1);
 }
 
-.btn-action.btn-update:hover {
-  background: rgba(102, 126, 234, 0.18);
-  border-color: rgba(102, 126, 234, 0.35);
+.btn-action.btn-deploy:hover {
+  background: rgba(99, 131, 255, 0.15);
+  border-color: rgba(99, 131, 255, 0.25);
 }
 
-.btn-action.btn-redeploy {
-  background: rgba(74, 222, 128, 0.08);
-  border-color: rgba(74, 222, 128, 0.15);
-  color: var(--success);
+.deploy-menu {
+  display: none;
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 220px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
 }
 
-.btn-action.btn-redeploy:hover {
-  background: rgba(74, 222, 128, 0.15);
-  border-color: rgba(74, 222, 128, 0.3);
+.deploy-menu.show {
+  display: flex;
+  flex-direction: column;
+}
+
+.deploy-option {
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--text-bright);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  text-align: left;
+}
+
+.deploy-option:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .btn-action.btn-disable {
-  background: rgba(251, 191, 36, 0.08);
-  border-color: rgba(251, 191, 36, 0.15);
-  color: var(--warning);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text);
 }
 
 .btn-action.btn-disable:hover:not(:disabled) {
-  background: rgba(251, 191, 36, 0.15);
-  border-color: rgba(251, 191, 36, 0.3);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .btn-action.btn-remove {
@@ -1074,15 +1080,15 @@ a.url-link:hover {
 }
 
 .btn-action.btn-delete {
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
   color: var(--error);
   margin-left: auto;
 }
 
 .btn-action.btn-delete:hover:not(:disabled) {
-  background: rgba(248, 113, 113, 0.15);
-  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.15);
 }
 
 /* Open In Dropdown */
@@ -1091,25 +1097,25 @@ a.url-link:hover {
 }
 
 .btn-action.btn-open-in {
-  background: rgba(102, 126, 234, 0.08);
-  border-color: rgba(102, 126, 234, 0.15);
-  color: var(--accent-1);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text);
 }
 
 .btn-action.btn-open-in:hover {
-  background: rgba(102, 126, 234, 0.15);
-  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .open-in-menu {
   display: none;
   position: fixed;
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   padding: 4px;
   min-width: 120px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   z-index: 9999;
 }
 
@@ -1123,17 +1129,16 @@ a.url-link:hover {
   background: none;
   border: none;
   border-radius: 5px;
-  color: var(--text);
+  color: var(--text-bright);
   font-size: 12px;
   font-weight: 500;
   font-family: var(--font);
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s;
 }
 
 .open-in-option:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Disabled state for action buttons */
@@ -1181,24 +1186,12 @@ a.url-link:hover {
 }
 
 .modal {
-  background: #14142a;
-  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius);
   padding: 32px;
   max-width: 440px;
   width: 90%;
-  animation: slideUp 0.2s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 .modal h2 {
@@ -1290,4 +1283,104 @@ a.url-link:hover {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---- Custom Domain Modal ---- */
+
+.modal-wide {
+  max-width: 520px;
+}
+
+.domain-step {
+  animation: fadeIn 0.2s ease;
+}
+
+.btn-action.btn-domain {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.btn-action.btn-domain:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.btn-action.btn-cancel-domain {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--error);
+}
+
+.btn-action.btn-cancel-domain:hover {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.15);
+}
+
+.dns-records {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+
+.dns-record-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dns-record-row:last-child {
+  border-bottom: none;
+}
+
+.dns-record-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dns-record-value {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Menlo', monospace;
+  color: var(--accent-1);
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.domain-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+}
+
+.domain-progress .spinner {
+  width: 20px;
+  height: 20px;
+}
+
+.domain-validate-status {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.domain-validate-status.pending {
+  background: rgba(234, 179, 8, 0.1);
+  color: #fbbf24;
+}
+
+.domain-validate-status.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
 }

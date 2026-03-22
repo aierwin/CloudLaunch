@@ -1,6 +1,6 @@
 {
   "name": "cloudlaunch",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Internal tool for deploying static websites to AWS S3 + CloudFront",
   "main": "src/main.js",
   "scripts": {
@@ -21,6 +21,7 @@
     ]
   },
   "dependencies": {
+    "@aws-sdk/client-acm": "^3.1014.0",
     "@aws-sdk/client-cloudfront": "^3.750.0",
     "@aws-sdk/client-s3": "^3.750.0",
     "mime-types": "^2.1.35",

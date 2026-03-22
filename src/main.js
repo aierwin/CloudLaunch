@@ -27,6 +27,13 @@ const {
   CreateInvalidationCommand
 } = require('@aws-sdk/client-cloudfront');
 
+const {
+  ACMClient,
+  RequestCertificateCommand,
+  DescribeCertificateCommand,
+  DeleteCertificateCommand
+} = require('@aws-sdk/client-acm');
+
 let mainWindow;
 
 // ---- Persistent Storage Paths ----
@@ -171,6 +178,25 @@ ipcMain.handle('open-in-app', async (_event, { app: appName, directoryPath }) =>
     case 'cursor':
       exec(`open -a "Cursor" "${directoryPath}"`);
       break;
+    case 'claude-code': {
+      const escapedPath = directoryPath.replace(/"/g, '\\"');
+      const itermScript = `
+        tell application "iTerm"
+          activate
+          set newWindow to (create window with default profile)
+          tell current session of newWindow
+            write text "cd \\"${escapedPath}\\" && claude"
+          end tell
+        end tell
+      `;
+      const terminalScript = `tell application "Terminal" to do script "cd \\"${escapedPath}\\" && claude"`;
+      exec(`osascript -e '${itermScript.replace(/'/g, "'\\''")}'`, (err) => {
+        if (err) {
+          exec(`osascript -e '${terminalScript}'`);
+        }
+      });
+      break;
+    }
   }
 });
 
@@ -239,6 +265,101 @@ ipcMain.handle('disable-distribution', async (_event, { accessKeyId, secretAcces
   } catch (err) {
     return { success: false, error: err.message };
   }
+});
+
+// Custom domain / ACM certificate
+ipcMain.handle('request-certificate', async (_event, { accessKeyId, secretAccessKey, domain }) => {
+  try {
+    const credentials = { accessKeyId, secretAccessKey };
+    const acm = new ACMClient({ region: 'us-east-1', credentials });
+    const result = await acm.send(new RequestCertificateCommand({
+      DomainName: domain,
+      ValidationMethod: 'DNS'
+    }));
+    return { success: true, certificateArn: result.CertificateArn };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('check-certificate-status', async (_event, { accessKeyId, secretAccessKey, certificateArn }) => {
+  try {
+    const credentials = { accessKeyId, secretAccessKey };
+    const acm = new ACMClient({ region: 'us-east-1', credentials });
+    const result = await acm.send(new DescribeCertificateCommand({ CertificateArn: certificateArn }));
+    const cert = result.Certificate;
+    const validationRecords = (cert.DomainValidationOptions || []).map(opt => ({
+      domain: opt.DomainName,
+      name: opt.ResourceRecord?.Name || '',
+      value: opt.ResourceRecord?.Value || '',
+      validationStatus: opt.ValidationStatus || 'PENDING'
+    }));
+    return { success: true, status: cert.Status, validationRecords };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('add-custom-domain', async (_event, { accessKeyId, secretAccessKey, distributionId, domain, certificateArn }) => {
+  try {
+    const credentials = { accessKeyId, secretAccessKey };
+    const cloudfront = new CloudFrontClient({ region: 'us-east-1', credentials });
+    const distConfig = await cloudfront.send(new GetDistributionConfigCommand({ Id: distributionId }));
+    const config = distConfig.DistributionConfig;
+
+    config.Aliases = { Quantity: 1, Items: [domain] };
+    config.ViewerCertificate = {
+      ACMCertificateArn: certificateArn,
+      SSLSupportMethod: 'sni-only',
+      MinimumProtocolVersion: 'TLSv1.2_2021'
+    };
+
+    await cloudfront.send(new UpdateDistributionCommand({
+      Id: distributionId,
+      DistributionConfig: config,
+      IfMatch: distConfig.ETag
+    }));
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('remove-custom-domain', async (_event, { accessKeyId, secretAccessKey, distributionId, certificateArn }) => {
+  try {
+    const credentials = { accessKeyId, secretAccessKey };
+
+    // Remove alias from CloudFront distribution
+    if (distributionId) {
+      const cloudfront = new CloudFrontClient({ region: 'us-east-1', credentials });
+      const distConfig = await cloudfront.send(new GetDistributionConfigCommand({ Id: distributionId }));
+      const config = distConfig.DistributionConfig;
+      if (config.Aliases && config.Aliases.Quantity > 0) {
+        config.Aliases = { Quantity: 0, Items: [] };
+        config.ViewerCertificate = { CloudFrontDefaultCertificate: true, MinimumProtocolVersion: 'TLSv1.2_2021' };
+        await cloudfront.send(new UpdateDistributionCommand({
+          Id: distributionId,
+          DistributionConfig: config,
+          IfMatch: distConfig.ETag
+        }));
+      }
+    }
+
+    // Try to delete ACM certificate (best-effort — may still be "in use" briefly)
+    try {
+      const acm = new ACMClient({ region: 'us-east-1', credentials });
+      await acm.send(new DeleteCertificateCommand({ CertificateArn: certificateArn }));
+    } catch { /* cert may still be in use by the distribution while it updates — harmless */ }
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('update-deployment-record', async (_event, { id, updates }) => {
+  updateDeploymentRecord(id, updates);
+  return true;
 });
 
 // Directory selection
@@ -582,11 +703,48 @@ async function updateDeploymentAWS(config, onProgress) {
 // --- Delete Deployment (tear down all AWS resources) ---
 
 async function deleteDeploymentAWS(config, onProgress) {
-  const { accessKeyId, secretAccessKey, region, bucketName, distributionId } = config;
+  const { accessKeyId, secretAccessKey, region, bucketName, distributionId, customDomains, pendingDomain } = config;
 
   const credentials = { accessKeyId, secretAccessKey };
   const s3 = new S3Client({ region, credentials });
   const cloudfront = new CloudFrontClient({ region: 'us-east-1', credentials });
+
+  // Step 0: Remove custom domain alias + delete ACM certificate if present
+  if (customDomains && customDomains.length > 0) {
+    onProgress({ step: 'removing-domain', status: 'in-progress', message: 'Removing custom domain...' });
+    try {
+      const distConfig = await cloudfront.send(new GetDistributionConfigCommand({ Id: distributionId }));
+      const cfConfig = distConfig.DistributionConfig;
+      cfConfig.Aliases = { Quantity: 0, Items: [] };
+      cfConfig.ViewerCertificate = { CloudFrontDefaultCertificate: true, MinimumProtocolVersion: 'TLSv1.2_2021' };
+      await cloudfront.send(new UpdateDistributionCommand({
+        Id: distributionId,
+        DistributionConfig: cfConfig,
+        IfMatch: distConfig.ETag
+      }));
+
+      const acm = new ACMClient({ region: 'us-east-1', credentials });
+      for (const cd of customDomains) {
+        if (cd.certificateArn) {
+          try {
+            await acm.send(new DeleteCertificateCommand({ CertificateArn: cd.certificateArn }));
+          } catch { /* cert may already be deleted */ }
+        }
+      }
+      onProgress({ step: 'removing-domain', status: 'complete', message: 'Custom domain removed' });
+    } catch (err) {
+      onProgress({ step: 'removing-domain', status: 'error', message: err.message });
+      throw new Error(`Failed to remove custom domain: ${err.message}`);
+    }
+  }
+
+  // Delete pending domain certificate if present
+  if (pendingDomain && pendingDomain.certificateArn) {
+    try {
+      const acm = new ACMClient({ region: 'us-east-1', credentials });
+      await acm.send(new DeleteCertificateCommand({ CertificateArn: pendingDomain.certificateArn }));
+    } catch { /* cert may already be deleted */ }
+  }
 
   // Step 1: Delete all objects in bucket
   onProgress({ step: 'deleting-objects', status: 'in-progress', message: 'Deleting bucket objects...' });
